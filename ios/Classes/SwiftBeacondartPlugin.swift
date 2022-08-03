@@ -43,35 +43,22 @@ public class SwiftBeacondartPlugin: NSObject, FlutterPlugin {
             }
             result(nil)
         case "onBeaconRequest":
-            let callBackId = call.arguments as! Int
-            onBeaconRequest { result in
-                
-                switch result {
-                    case let .success(peers):
-                        let resp: [String: Any] = ["id": callBackId, "args": peers]
-                        self.channel!.invokeMethod("callListener", arguments: resp);
-                    case  .failure(_):
-                        return
-                }
-            }
+            beaconListenerReady = true
             result(true)
-        case "cancelListening": // stop listening for beacon requests
-            let callBackId = call.arguments as! Int
-            cancelListening(callBackId: callBackId)
+        case "sendResponse":
+            let args = call.arguments as! [String: Any]
+            sendResponse(from: args)
             result(true)
         case "startBeacon":
             let args = call.arguments as! [String: Any]
-            print(args)
             startBeacon(appName: args["appName"] as! String, publicKey: args["publicKey"] as! String, address: args["address"] as! String, completion: {res in
-                print(["startBeacon!", res])
                 switch res {
                 case  .success(_):
                     let resp: [String: Any] = ["id": args["callBackId"] as! Int, "args": true]
-                    print(resp)
                     self.channel!.invokeMethod("callListener", arguments: resp)
-                case let .failure(error):
-                    print(error)
-                    return
+                case  .failure(_):
+                    let resp: [String: Any] = ["id": args["callBackId"] as! Int, "args": false]
+                    self.channel!.invokeMethod("callListener", arguments: resp)
                 }
             })
             result(true)
@@ -82,9 +69,37 @@ public class SwiftBeacondartPlugin: NSObject, FlutterPlugin {
     
     var beaconWallet: Beacon.WalletClient!
     
-    var callbacksById: [Int: () -> Void] = [:]
+    var callbacksById: [Int: ([String:Any]) -> Void] = [:]
+    
+    var callBackId: Int = 1
+    
+    var beaconListenerReady: Bool = false
     
     var channel: FlutterMethodChannel?
+    
+    let beaconCallBackId: Int = 0
+    
+    func nextCallBackId() -> Int {
+        callBackId += 1
+        return callBackId
+    }
+    
+    func sendRequest(params: [String: Any]) {
+        let resp: [String: Any] = ["id": beaconCallBackId, "args": params]
+        self.channel!.invokeMethod("callListener", arguments: resp)
+    }
+    
+    func registerCallBack(callBack: @escaping ([String:Any]) -> Void) -> Int {
+        let id: Int = nextCallBackId()
+        callbacksById[id] = callBack
+        return id
+    }
+    
+    func execCallBack(params: [String:Any]) {
+        let id: Int = params["id"] as! Int
+        callbacksById[id]!(params)
+        callbacksById.removeValue(forKey: id)
+    }
         
     func addPeer(peerInfo: [String: String]) {
         let peer = Beacon.P2PPeer(
@@ -109,13 +124,13 @@ public class SwiftBeacondartPlugin: NSObject, FlutterPlugin {
         beaconWallet.getPeers{ result in
             switch result {
             case let .success(peers):
-                completion(.success(self.objToJson(from: peers)!))
+                completion(.success(self.toJsonB64(from: peers)))
             case let .failure(error):
                 completion(.failure(error))
             }
         }
     }
-
+    
     func tezosAccount(network: Tezos.Network, publicKey: String, address: String) throws -> Tezos.Account {
         try Tezos.Account(
             publicKey: publicKey,
@@ -127,7 +142,6 @@ public class SwiftBeacondartPlugin: NSObject, FlutterPlugin {
     func startBeacon(appName: String, publicKey: String, address: String, completion: @escaping (Result<(), Error>) -> ()) {
         print("startBeacon")
         createBeaconWallet(appName: appName, completion: { result in
-            print(["createBeaconWallet!",result])
                 guard case .success(_) = result else {
                     return
                 }
@@ -139,7 +153,6 @@ public class SwiftBeacondartPlugin: NSObject, FlutterPlugin {
                 }
 
                 self.subscribeToRequests(publicKey: publicKey, address: address, completion:  { result in
-                    print(["subscribeToRequests!",result])
                     guard case .success(_) = result else {
                         return
                     }
@@ -154,7 +167,6 @@ public class SwiftBeacondartPlugin: NSObject, FlutterPlugin {
     }
 
     func createBeaconWallet(appName: String, completion: @escaping (Result<(), Error>) -> ()) {
-        print("createBeaconWallet")
         do {
             Beacon.WalletClient.create(
                 with: .init(
@@ -163,7 +175,6 @@ public class SwiftBeacondartPlugin: NSObject, FlutterPlugin {
                     connections: [try Transport.P2P.Matrix.connection()]
                 )
             ) { result in
-                print(["createBeaconWallet",result])
                 switch result {
                 case let .success(client):
                     self.beaconWallet = client
@@ -178,12 +189,10 @@ public class SwiftBeacondartPlugin: NSObject, FlutterPlugin {
     }
 
     func subscribeToRequests(publicKey: String, address: String, completion: @escaping (Result<(), Error>) -> ()) {
-        print("subscribeToRequests")
         beaconWallet.connect { result in
-            print(["subscribeToRequests",result])
             switch result {
             case .success(_):
-                self.beaconWallet.listen(onRequest: self.onTezosRequest(publicKey: publicKey, address: address))
+                self.beaconWallet.listen(onRequest: self.onBeaconRequest(publicKey: publicKey, address: address))
                 completion(.success(()))
             case let .failure(error):
                 completion(.failure(error))
@@ -191,48 +200,163 @@ public class SwiftBeacondartPlugin: NSObject, FlutterPlugin {
         }
     }
 
-    func onTezosRequest(publicKey: String, address: String) -> ((Result<BeaconRequest<Tezos>, Beacon.Error>) -> Void){
+    func onBeaconRequest(publicKey: String, address: String) -> ((Result<BeaconRequest<Tezos>, Beacon.Error>) -> Void){
         return { (_ request: Result<BeaconRequest<Tezos>, Beacon.Error>) in
             do {
                 let request = try request.get()
-                let response = try self.response(from: request, publicKey: publicKey, address: address)
-
-                self.beaconWallet.respond(with: response) { result in
-                    switch result {
-                    case .success(_):
-                        print("Response sent")
-                    case let .failure(error):
-                        print(error)
-                    }
-                }
+                self.onTezosRequest(from: request, publicKey: publicKey, address: address)
             } catch {
                 print(error)
             }
         }
     }
+    
+    func onTezosRequest(from request: BeaconRequest<Tezos>, publicKey: String, address: String) -> Void {
+        do {
+            let res = try self.tezosResponse(from: request, publicKey: publicKey, address: address)
+            switch res.type {
+                case .Permission:
+                    self.handleTezosPermission(from: res.response, publicKey: publicKey, address: address)
+                case .Operation:
+                    self.handleTezosOperation(from: res.response)
+                case .SignPayload:
+                    self.handleTezosSignPayload(from: res.response)
+                case .Broadcast:
+                    self.handleTezosBroadcast(from: res.response)
+            }
+        } catch {
+            print(error)
+        }
+            
+    }
+    
+    func handleTezosBroadcast(from request: BeaconRequestProtocol) -> Void {
+        let content = request as! BroadcastTezosRequest
+        let id: Int = self.registerCallBack(callBack: { (params: [String:Any]) -> Void in
+            let status = params["status"] as! Bool
+            if status == false {
+                return
+            }
+            let transactionHash = params["transactionHash"] as! String
+            let response = BeaconResponse<Tezos>.blockchain(.broadcast(BroadcastTezosResponse(from: content, transactionHash: transactionHash)))
+            self.sendTezosResponse(from: response)
+        })
+        self.sendRequest(params: [
+            "id": id,
+            "type": "TezosBroadcast",
+            "data": self.toJsonB64(from: content)
+        ])
+    }
+    
+    func handleTezosSignPayload(from request: BeaconRequestProtocol) -> Void {
+        let content = request as! SignPayloadTezosRequest
+        let id: Int = self.registerCallBack(callBack: { (params: [String:Any]) -> Void in
+            let status = params["status"] as! Bool
+            if status == false {
+                return
+            }
+            let signature = params["signature"] as! String
+            let response = BeaconResponse<Tezos>.blockchain(.signPayload(SignPayloadTezosResponse(from: content, signature: signature)))
+            self.sendTezosResponse(from: response)
+        })
+        self.sendRequest(params: [
+            "id": id,
+            "type": "TezosSignPayload",
+            "data": self.toJsonB64(from: content)
+        ])
+    }
+    
+    func handleTezosOperation(from request: BeaconRequestProtocol) -> Void {
+        let content = request as! OperationTezosRequest
+        let id: Int = self.registerCallBack(callBack: { (params: [String:Any]) -> Void in
+            let status = params["status"] as! Bool
+            if status == false {
+                return
+            }
+            let transactionHash = params["transactionHash"] as! String
+            let response = BeaconResponse<Tezos>.blockchain(.operation(OperationTezosResponse(from: content, transactionHash: transactionHash)))
+            self.sendTezosResponse(from: response)
+        })
+        
+        self.sendRequest(params: [
+            "id": id,
+            "type": "TezosOperation",
+            "data": self.toJsonB64(from: content)
+        ])
+    }
+    
+    func handleTezosPermission(from request: BeaconRequestProtocol, publicKey: String, address: String) -> Void {
+        let content = request as! PermissionTezosRequest
+        let id: Int = self.registerCallBack(callBack: { (params: [String:Any]) -> Void in
+            do {
+                let status = params["status"] as! Bool
+                if status == false {
+                    return
+                }
+                let account = try self.tezosAccount(network: content.network, publicKey: publicKey, address: address)
+                let response = BeaconResponse<Tezos>.permission(PermissionTezosResponse(from: content, account: account))
+                self.sendTezosResponse(from: response)
+            } catch {
+                print(error)
+            }
+            
+        })
+        self.sendRequest(params: [
+            "id": id,
+            "type": "TezosPermission",
+            "data": self.toJsonB64(from: content)
+        ])
+    }
+    
+    func sendTezosResponse(from response: BeaconResponse<Tezos>) -> Void {
+        self.beaconWallet.respond(with: response) { result in
+            switch result {
+            case .success(_):
+                print("Response sent")
+            case let .failure(error):
+                print(error)
+            }
+        }
+    }
 
-    func response(from request: BeaconRequest<Tezos>, publicKey: String, address: String) throws -> BeaconResponse<Tezos> {
+    func tezosResponse(from request: BeaconRequest<Tezos>, publicKey: String, address: String) throws -> (type: TezosBeaconRequest, response: BeaconRequestProtocol) {
+         
         switch request {
         case let .permission(content):
-            let account = try tezosAccount(network: content.network, publicKey: publicKey, address: address)
-            return .permission(PermissionTezosResponse(from: content, account: account))
+            return (TezosBeaconRequest.Permission, content)
         case let .blockchain(blockchain):
-            return .error(ErrorBeaconResponse(from: blockchain, errorType: .aborted))
+            switch blockchain {
+            case let .operation(content):
+                return (TezosBeaconRequest.Operation, content)
+            case let .signPayload(content):
+                return (TezosBeaconRequest.SignPayload, content)
+            case let .broadcast(content):
+                return (TezosBeaconRequest.Broadcast, content)
+            }
         }
     }
     
-    func onBeaconRequest(completion: @escaping (Result<(), Error>) -> ()) {
-        
+    func sendResponse(from object: [String: Any]) {
+        self.execCallBack(params: object)
     }
     
-    func cancelListening(callBackId: Int) {
-        callbacksById.removeValue(forKey: callBackId)
-    }
-    
-    func objToJson(from object:Any) -> String? {
-        guard let data = try? JSONSerialization.data(withJSONObject: object, options: []) else {
-            return nil
+    func toJsonB64<T: Encodable>(from content: T) -> String {
+        do {
+            let encoder = JSONEncoder()
+            let encoded = try encoder.encode(content)
+            print("encoded = ", encoded.base64EncodedString())
+            return encoded.base64EncodedString()
+        } catch {
+            print("encode error = ", error)
+            return ""
         }
-        return String(data: data, encoding: String.Encoding.utf8)
     }
+    
+}
+
+enum TezosBeaconRequest {
+    case Permission
+    case Operation
+    case SignPayload
+    case Broadcast
 }

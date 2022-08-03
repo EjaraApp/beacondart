@@ -1,3 +1,6 @@
+import 'dart:convert';
+
+import 'package:base_codecs/base_codecs.dart';
 import 'package:flutter/material.dart';
 import 'dart:async';
 
@@ -21,32 +24,28 @@ class _MyAppState extends State<MyApp> {
     initPlatformState();
   }
 
+  BeaconWalletClient bmw = BeaconWalletClient();
+
   // Platform messages are asynchronous, so we initialize in an async method.
   Future<void> initPlatformState() async {
-    BeaconWalletClient bmw = BeaconWalletClient();
     await bmw.init(
       'Ejara',
       '9ae0875d510904b0b15d251d8def1f5f3353e9799841c0ed6d7ac718f04459a0',
       'tz1SkbBZg15BXPRkYCrSzhY6rq4tKGtpUSWv',
     );
-    // Map<String, String> dApp = {
-    //   "id": "c9393d90-b315-d3b8-6442-890813dfc1b9",
-    //   "name": "Beacon Docs",
-    //   "publicKey":
-    //       "015270460ae9144fe178e7ee00a3ec85b3d15e9b1d80fa907b3eb0ac4653fc27",
-    //   "relayServer": "beacon-node-1.hope-3.papers.tech",
-    //   "version": "2"
-    // };
-    // await bmw.addPeer(dApp);
-    // await bmw.getPeers((response) {
-    //   print(response);
-    // });
-
-    // await bmw.onBeaconRequest((response) {
-    //   print(response);
-    // });
   }
 
+  String b58ToString(String b58String) {
+    var b = base58CheckDecode(b58String);
+    return utf8.decode(b);
+  }
+
+  Map b64Decode(String b64) {
+    return jsonDecode(utf8.decode(base64.decode(b64)));
+  }
+
+  final TextEditingController _controller = TextEditingController();
+  bool isEmpty = false;
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
@@ -54,8 +53,93 @@ class _MyAppState extends State<MyApp> {
         appBar: AppBar(
           title: const Text('Plugin example app'),
         ),
-        body: const Center(
-          child: Text('Program is running ...'),
+        body: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              TextFormField(
+                controller: _controller,
+                maxLines: 7,
+                decoration: InputDecoration(
+                    border: const OutlineInputBorder(),
+                    hintText: 'Enter text here..',
+                    errorText: isEmpty ? 'Please enter text' : null),
+                onChanged: (String value) {
+                  if (value.isEmpty) {
+                    setState(() {
+                      isEmpty = true;
+                    });
+                  } else {
+                    setState(() {
+                      isEmpty = false;
+                    });
+                  }
+                },
+              ),
+              ElevatedButton(
+                onPressed: () async {
+                  if (_controller.text.isNotEmpty) {
+                    debugPrint(_controller.text);
+                    String conn = b58ToString(_controller.text);
+                    Map<String, String> dApp = Map<String, String>.from(
+                      jsonDecode(conn),
+                    );
+
+                    await bmw.onBeaconRequest((response) async {
+                      debugPrint('onBeaconRequest = ${b64Decode(response)}');
+                      switch (response['type']) {
+                        case "TezosPermission":
+                          bmw.sendResponse({
+                            "id": response["id"],
+                            "status": true,
+                          }, (args) {});
+                          break;
+                        case "TezosOperation":
+                          bmw.sendResponse({
+                            "id": response["id"],
+                            "status": true,
+                            "transactionHash": "wow",
+                          }, (args) {});
+                          break;
+                        case "TezosSignPayload":
+                          bmw.sendResponse({
+                            "id": response["id"],
+                            "status": true,
+                            "signature": "wow",
+                          }, (args) {});
+                          break;
+                        case "TezosBroadcast":
+                          bmw.sendResponse({
+                            "id": response["id"],
+                            "status": true,
+                            "transactionHash": "wow",
+                          }, (args) {});
+                          break;
+                        default:
+                      }
+                    });
+
+                    await bmw.addPeer(dApp);
+
+                    await bmw.getPeers((response) {
+                      debugPrint('getPeers = ${b64Decode(response)}');
+                    });
+
+                    setState(() {
+                      isEmpty = false;
+                      _controller.text = '';
+                    });
+                  } else {
+                    setState(() {
+                      isEmpty = true;
+                    });
+                  }
+                },
+                child: const Text('Connect'),
+              )
+            ],
+          ),
         ),
       ),
     );

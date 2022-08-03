@@ -2,18 +2,35 @@ import 'dart:async';
 
 import 'package:flutter/services.dart';
 
+typedef MultiUseCallback = void Function(dynamic args);
+typedef CloseChannelCallBack = void Function();
+
+enum ChannelMethods {
+  removePeer,
+  getPeers,
+  addPeer,
+  onBeaconRequest,
+  sendResponse,
+  startBeacon,
+  cancelListening,
+  removePeers
+}
+
 class BeaconWalletClient {
   static const MethodChannel _channel = MethodChannel('beacondart');
 
   static final BeaconWalletClient _singleton = BeaconWalletClient._internal();
 
-  static final Map<int, void Function(MethodCall call)> callbacksById = {};
+  static final Map<int, MultiUseCallback> callbacksById = {};
 
-  static int nextCallbackId = 0;
+  static const int beaconCallBackId = 0;
 
-  bool beaconIsInit = false;
+  static int callBackId = 1;
+
+  static bool beaconIsInit = false;
 
   factory BeaconWalletClient() {
+    _channel.setMethodCallHandler(methodCallHandler);
     return _singleton;
   }
 
@@ -28,35 +45,30 @@ class BeaconWalletClient {
     // user completer to check beaconIsInit
     Completer<bool> completer = Completer();
 
-    int tries = 1;
-    int n = 0;
-    int seconds = 4;
+    int usedTime = 0;
+    const int maxWaitTime = 5000;
+    const int waitTime = 500;
 
-    check(int tries) {
-      seconds = seconds ~/ tries;
-
-      if (seconds < 1) {
-        completer.completeError(
-            "Gave up waiting for wallet service after $tries tries in $n seconds. ...");
+    check(int usedTime) {
+      if (usedTime == maxWaitTime) {
+        completer.complete(false);
       }
 
-      n += seconds;
-      print(beaconIsInit);
       if (beaconIsInit) {
         completer.complete(true);
       } else {
-        Duration timeout = Duration(seconds: seconds);
-        Timer(timeout, () => check(++tries));
+        usedTime += waitTime;
+        Duration timeout = const Duration(milliseconds: waitTime);
+        Timer(timeout, () => check(usedTime));
       }
     }
 
-    check(tries);
+    check(usedTime);
 
     return completer.future;
   }
 
   static Future<void> methodCallHandler(MethodCall call) async {
-    print('called...');
     switch (call.method) {
       case 'callListener':
         callbacksById[call.arguments["id"]]!(call.arguments["args"]);
@@ -66,7 +78,8 @@ class BeaconWalletClient {
   }
 
   Future<bool> addPeer(Map<String, String> dApp) async {
-    final bool status = await _channel.invokeMethod("addPeer", <String, String>{
+    final bool status = await _channel
+        .invokeMethod(ChannelMethods.addPeer.name, <String, String>{
       "id": dApp["id"]!,
       "name": dApp["name"]!,
       "publicKey": dApp["publicKey"]!,
@@ -78,31 +91,45 @@ class BeaconWalletClient {
 
   Future<bool> removePeer(String peerPublicKey) async {
     final bool status = await _channel.invokeMethod(
-      "removePeer",
+      ChannelMethods.removePeer.name,
       peerPublicKey,
     );
     return status;
   }
 
   Future<bool> removePeers() async {
-    final bool status = await _channel.invokeMethod("removePeers");
+    final bool status = await _channel.invokeMethod(
+      ChannelMethods.removePeers.name,
+    );
     return status;
   }
 
-  getPeers(void Function(dynamic response) responder) async {
-    void Function() cancel = await callBackRequest(
-      "getPeers",
+  Future<CloseChannelCallBack> getPeers(MultiUseCallback responder) async {
+    CloseChannelCallBack cancel = await callBackRequest(
+      ChannelMethods.getPeers.name,
       responder,
     );
     return cancel;
   }
 
-  Future<void Function()> onBeaconRequest(
-    void Function(dynamic response) responder,
+  Future<CloseChannelCallBack> onBeaconRequest(
+    MultiUseCallback responder,
   ) async {
-    void Function() cancel = await callBackRequest(
-      "onBeaconRequest",
+    CloseChannelCallBack cancel = await callBackRequest(
+      ChannelMethods.onBeaconRequest.name,
       responder,
+    );
+    return cancel;
+  }
+
+  Future<CloseChannelCallBack> sendResponse(
+    Map<String, dynamic> args,
+    MultiUseCallback responder,
+  ) async {
+    CloseChannelCallBack cancel = await callBackRequestWithArgs(
+      ChannelMethods.sendResponse.name,
+      responder,
+      args,
     );
     return cancel;
   }
@@ -110,34 +137,19 @@ class BeaconWalletClient {
   _startBeacon(
     Map<String, String> args,
   ) async {
-    _channel.setMethodCallHandler(methodCallHandler);
-    int currentListenerId = nextCallbackId++;
-    callbacksById[currentListenerId] = (response) {
-      print(response);
-      beaconIsInit = true;
-    };
-    await _channel.invokeMethod(
-      "startBeacon",
-      {
-        "callBackId": currentListenerId,
-        ...args,
-      },
+    CloseChannelCallBack cancel = await callBackRequestWithArgs(
+      ChannelMethods.startBeacon.name,
+      (response) => beaconIsInit = true,
+      args,
     );
-    return () {
-      _channel.invokeMethod(
-        "cancelListening",
-        currentListenerId,
-      );
-      callbacksById.remove(currentListenerId);
-    };
+    return cancel;
   }
 
-  Future<void Function()> callBackRequest(
+  Future<CloseChannelCallBack> callBackRequest(
     String callBack,
-    void Function(dynamic response) responder,
+    MultiUseCallback responder,
   ) async {
-    _channel.setMethodCallHandler(methodCallHandler);
-    int currentListenerId = nextCallbackId++;
+    int currentListenerId = _nextCallbackId(callBack);
     callbacksById[currentListenerId] = responder;
     await _channel.invokeMethod(
       callBack,
@@ -145,10 +157,40 @@ class BeaconWalletClient {
     );
     return () {
       _channel.invokeMethod(
-        "cancelListening",
+        ChannelMethods.cancelListening.name,
         currentListenerId,
       );
       callbacksById.remove(currentListenerId);
     };
+  }
+
+  Future<CloseChannelCallBack> callBackRequestWithArgs(
+    String callBack,
+    MultiUseCallback responder,
+    Map<String, dynamic> args,
+  ) async {
+    int currentListenerId = _nextCallbackId(callBack);
+    callbacksById[currentListenerId] = responder;
+    await _channel.invokeMethod(
+      callBack,
+      {
+        "callBackId": currentListenerId,
+        ...args,
+      },
+    );
+    return () {
+      _channel.invokeMethod(
+        ChannelMethods.cancelListening.name,
+        currentListenerId,
+      );
+      callbacksById.remove(currentListenerId);
+    };
+  }
+
+  int _nextCallbackId(String methodName) {
+    if (methodName == ChannelMethods.onBeaconRequest.name) {
+      return beaconCallBackId;
+    }
+    return callBackId++;
   }
 }
