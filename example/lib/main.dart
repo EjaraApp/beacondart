@@ -40,8 +40,9 @@ class _MyAppState extends State<MyApp> {
     return utf8.decode(b);
   }
 
-  Map b64Decode(String b64) {
-    return jsonDecode(utf8.decode(base64.decode(b64)));
+  dynamic b64Decode(dynamic b64) {
+    // return jsonDecode(utf8.decode(base64.decode(b64)));
+    return b64;
   }
 
   final TextEditingController _controller = TextEditingController();
@@ -122,9 +123,9 @@ class _MyAppState extends State<MyApp> {
 
                     await bmw.addPeer(dApp);
 
-                    await bmw.getPeers((response) {
-                      debugPrint('getPeers = ${b64Decode(response)}');
-                    });
+                    // await bmw.getPeers((response) {
+                    //   debugPrint('getPeers = ${b64Decode(response)}');
+                    // });
 
                     setState(() {
                       isEmpty = false;

@@ -1,5 +1,6 @@
 package africa.ejara.beacondart
 
+import africa.ejara.beacondart.utils.toJson
 import androidx.annotation.NonNull
 
 import io.flutter.embedding.engine.plugins.FlutterPlugin
@@ -31,7 +32,6 @@ import it.airgap.beaconsdk.core.data.Peer
 import it.airgap.beaconsdk.core.data.SigningType
 import it.airgap.beaconsdk.core.message.*
 import it.airgap.beaconsdk.transport.p2p.matrix.p2pMatrix
-
 
 /** BeacondartPlugin */
 class BeacondartPlugin: FlutterPlugin, MethodCallHandler {
@@ -102,18 +102,19 @@ class BeacondartPlugin: FlutterPlugin, MethodCallHandler {
     return callBackId
   }
 
-  fun sendRequest(params: Map<String, Any>) {
+  private fun sendRequest(params: Map<String, Any>) {
     val resp: Map<String, Any> = mapOf("id" to beaconCallBackId, "args" to params)
     channel.invokeMethod("callListener", resp)
   }
 
-  fun registerCallBack(callBack: (Map<String, Any>) -> Unit) : Int {
+  private fun registerCallBack(callBack: (Map<String, Any>) -> Unit) : Int {
     val id: Int = nextCallBackId()
     callbacksById[id] = callBack
     return id
   }
 
   private fun execCallBack(params: Map<String, Any>) {
+    println("execCallBack")
     val id: Int = params["id"] as Int
     callbacksById[id]?.invoke(params)
     callbacksById.remove(id)
@@ -175,7 +176,7 @@ class BeacondartPlugin: FlutterPlugin, MethodCallHandler {
   private fun getPeers(callBackId: Int, result: Result) {
     beaconWallet.getPeers(callback = object : GetCallback<List<Peer>> {
       override fun onSuccess(peers: List<Peer>) {
-        val resp: Map<String, Any> = mapOf("id" to callBackId, "args" to peers)
+        val resp: Map<String, Any> = mapOf("id" to callBackId, "args" to listOf<String>())
         result.success(resp)
       }
 
@@ -238,10 +239,12 @@ class BeacondartPlugin: FlutterPlugin, MethodCallHandler {
       val response = PermissionTezosResponse.from(message, account)
       sendTezosResponse(response)
     }
+
+    println(message)
     sendRequest(mapOf(
       "id" to id,
       "type" to "TezosPermission",
-      "data" to message
+      "data" to ""
     ))
   }
 
@@ -255,10 +258,12 @@ class BeacondartPlugin: FlutterPlugin, MethodCallHandler {
       val response = OperationTezosResponse.from(message, transactionHash)
       sendTezosResponse(response)
     }
+
+    println(message)
     sendRequest(mapOf(
       "id" to id,
       "type" to "TezosOperation",
-      "data" to message
+      "data" to ""
     ))
   }
 
@@ -273,10 +278,12 @@ class BeacondartPlugin: FlutterPlugin, MethodCallHandler {
       val response = SignPayloadTezosResponse.from(message, message.signingType, signature)
       sendTezosResponse(response)
     }
+
+    println(message)
     sendRequest(mapOf(
       "id" to id,
       "type" to "TezosSignPayload",
-      "data" to message
+      "data" to ""
     ))
   }
 
@@ -290,14 +297,16 @@ class BeacondartPlugin: FlutterPlugin, MethodCallHandler {
       val response = BroadcastTezosResponse.from(message, transactionHash)
       sendTezosResponse(response)
     }
+
+    println(message)
     sendRequest(mapOf(
       "id" to id,
       "type" to "TezosBroadcast",
-      "data" to message
+      "data" to ""
     ))
   }
 
-  fun sendTezosResponse(response: BeaconResponse) {
+  private fun sendTezosResponse(response: BeaconResponse) {
     beaconWallet.respond(response, callback = object: ResponseCallback {
       override fun onSuccess() {
         println("Response sent")
@@ -309,11 +318,11 @@ class BeacondartPlugin: FlutterPlugin, MethodCallHandler {
     })
   }
 
-  fun sendResponse(from: Map<String, Any>) {
+  private fun sendResponse(from: Map<String, Any>) {
     execCallBack(from)
   }
 
-  fun tezosAccount(network: TezosNetwork, publicKey: String, address: String): TezosAccount = TezosAccount(
+  private fun tezosAccount(network: TezosNetwork, publicKey: String, address: String): TezosAccount = TezosAccount(
     publicKey,
     address,
     network,
