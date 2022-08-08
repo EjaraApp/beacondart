@@ -1,18 +1,15 @@
 package africa.ejara.beacondart
 
-import africa.ejara.beacondart.utils.toJson
+import android.app.Activity
 import androidx.annotation.NonNull
-
 import io.flutter.embedding.engine.plugins.FlutterPlugin
+import io.flutter.embedding.engine.plugins.activity.ActivityAware
+import io.flutter.embedding.engine.plugins.activity.ActivityPluginBinding
 import io.flutter.plugin.common.MethodCall
 import io.flutter.plugin.common.MethodChannel
 import io.flutter.plugin.common.MethodChannel.MethodCallHandler
 import io.flutter.plugin.common.MethodChannel.Result
-import it.airgap.beaconsdk.blockchain.substrate.message.response.PermissionSubstrateResponse
-import it.airgap.beaconsdk.blockchain.substrate.substrate
-import it.airgap.beaconsdk.blockchain.tezos.Tezos
 import it.airgap.beaconsdk.blockchain.tezos.data.TezosAccount
-import it.airgap.beaconsdk.blockchain.tezos.data.TezosError
 import it.airgap.beaconsdk.blockchain.tezos.data.TezosNetwork
 import it.airgap.beaconsdk.blockchain.tezos.message.request.BroadcastTezosRequest
 import it.airgap.beaconsdk.blockchain.tezos.message.request.OperationTezosRequest
@@ -25,25 +22,37 @@ import it.airgap.beaconsdk.blockchain.tezos.message.response.SignPayloadTezosRes
 import it.airgap.beaconsdk.blockchain.tezos.tezos
 import it.airgap.beaconsdk.client.wallet.BeaconWalletClient
 import it.airgap.beaconsdk.client.wallet.compat.*
-import it.airgap.beaconsdk.core.blockchain.Blockchain
-import it.airgap.beaconsdk.core.data.BeaconError
 import it.airgap.beaconsdk.core.data.P2pPeer
 import it.airgap.beaconsdk.core.data.Peer
-import it.airgap.beaconsdk.core.data.SigningType
 import it.airgap.beaconsdk.core.message.*
 import it.airgap.beaconsdk.transport.p2p.matrix.p2pMatrix
+import africa.ejara.beacondart.utils.toJson
 
 /** BeacondartPlugin */
-class BeacondartPlugin: FlutterPlugin, MethodCallHandler {
+class BeacondartPlugin: FlutterPlugin, MethodCallHandler, ActivityAware {
   /// The MethodChannel that will the communication between Flutter and native Android
   ///
   /// This local reference serves to register the plugin with the Flutter Engine and unregister it
   /// when the Flutter Engine is detached from the Activity
   private lateinit var channel : MethodChannel
+  private lateinit var activity: Activity
 
   override fun onAttachedToEngine(@NonNull flutterPluginBinding: FlutterPlugin.FlutterPluginBinding) {
     channel = MethodChannel(flutterPluginBinding.binaryMessenger, "beacondart")
     channel.setMethodCallHandler(this)
+  }
+
+  override fun onAttachedToActivity(binding: ActivityPluginBinding) {
+    activity = binding.activity
+  }
+
+  override fun onDetachedFromActivityForConfigChanges() {
+  }
+
+  override  fun onReattachedToActivityForConfigChanges(binding: ActivityPluginBinding) {
+  }
+
+  override fun onDetachedFromActivity() {
   }
 
   override fun onMethodCall(@NonNull call: MethodCall, @NonNull result: Result) {
@@ -104,7 +113,8 @@ class BeacondartPlugin: FlutterPlugin, MethodCallHandler {
 
   private fun sendRequest(params: Map<String, Any>) {
     val resp: Map<String, Any> = mapOf("id" to beaconCallBackId, "args" to params)
-    channel.invokeMethod("callListener", resp)
+
+    activity.runOnUiThread(Runnable { channel.invokeMethod("callListener", resp) })
   }
 
   private fun registerCallBack(callBack: (Map<String, Any>) -> Unit) : Int {
@@ -240,11 +250,11 @@ class BeacondartPlugin: FlutterPlugin, MethodCallHandler {
       sendTezosResponse(response)
     }
 
-    println(message)
+    println(message.toJson())
     sendRequest(mapOf(
       "id" to id,
       "type" to "TezosPermission",
-      "data" to ""
+      "data" to message.toJson()
     ))
   }
 
@@ -274,7 +284,6 @@ class BeacondartPlugin: FlutterPlugin, MethodCallHandler {
         return@registerCallBack
       }
       val signature = it["signature"] as String
-      SigningType
       val response = SignPayloadTezosResponse.from(message, message.signingType, signature)
       sendTezosResponse(response)
     }
