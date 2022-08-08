@@ -8,6 +8,7 @@ import it.airgap.beaconsdk.blockchain.substrate.message.response.*
 import it.airgap.beaconsdk.blockchain.tezos.message.request.*
 import it.airgap.beaconsdk.blockchain.tezos.message.response.*
 import it.airgap.beaconsdk.core.data.BeaconError
+import it.airgap.beaconsdk.core.data.Peer
 import it.airgap.beaconsdk.core.internal.utils.failWithIllegalArgument
 import it.airgap.beaconsdk.core.message.*
 import kotlinx.serialization.json.Json
@@ -472,6 +473,19 @@ fun SignPayloadSubstrateResponse.Return.toJson(json: Json = Json.Default): JsonE
             "blockchainIdentifier" to json.encodeToJsonElement(blockchainIdentifier),
             "signature" to json.encodeToJsonElement(signature),
             "payload" to json.encodeToJsonElement(payload),
+        )
+    )
+
+fun Peer.toJson(json: Json = kotlinx.serialization.json.Json.Default): JsonElement =
+    JsonObject(
+        mapOf(
+            "type" to json.encodeToJsonElement("peer"),
+            "id" to json.encodeToJsonElement(id),
+            "version" to json.encodeToJsonElement(version),
+            "name" to json.encodeToJsonElement(name),
+            "publicKey" to json.encodeToJsonElement(publicKey),
+            "isPaired" to json.encodeToJsonElement(isPaired),
+            "payload" to json.encodeToJsonElement(isRemoved),
         )
     )
 

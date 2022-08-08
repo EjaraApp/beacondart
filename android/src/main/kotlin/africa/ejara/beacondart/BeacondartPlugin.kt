@@ -73,7 +73,7 @@ class BeacondartPlugin: FlutterPlugin, MethodCallHandler, ActivityAware {
       }
       "getPeers" -> {
         val callBackId: Int =  call.arguments()!!
-        getPeers(callBackId, result)
+        getPeers(callBackId)
       }
       "onBeaconRequest" -> {
         beaconListenerReady = true
@@ -86,7 +86,7 @@ class BeacondartPlugin: FlutterPlugin, MethodCallHandler, ActivityAware {
       }
       "startBeacon" -> {
         val args: Map<String, Any> = call.arguments()!!
-        startBeacon(args["appName"] as String, args["publicKey"] as String, args["address"] as String, args["callBackId"] as Int, result)
+        startBeacon(args["appName"] as String, args["publicKey"] as String, args["address"] as String, args["callBackId"] as Int)
       }
       else -> result.notImplemented()
     }
@@ -111,8 +111,8 @@ class BeacondartPlugin: FlutterPlugin, MethodCallHandler, ActivityAware {
     return callBackId
   }
 
-  private fun sendRequest(params: Map<String, Any>) {
-    val resp: Map<String, Any> = mapOf("id" to beaconCallBackId, "args" to params)
+  private fun sendRequest(params: Any, callId: Int = beaconCallBackId) {
+    val resp: Map<String, Any> = mapOf("id" to callId, "args" to params)
 
     activity.runOnUiThread(Runnable { channel.invokeMethod("callListener", resp) })
   }
@@ -124,7 +124,6 @@ class BeacondartPlugin: FlutterPlugin, MethodCallHandler, ActivityAware {
   }
 
   private fun execCallBack(params: Map<String, Any>) {
-    println("execCallBack")
     val id: Int = params["id"] as Int
     callbacksById[id]?.invoke(params)
     callbacksById.remove(id)
@@ -140,7 +139,7 @@ class BeacondartPlugin: FlutterPlugin, MethodCallHandler, ActivityAware {
     )
     beaconWallet.addPeers(peer, callback = object : SetCallback {
       override fun onSuccess() {
-        println("peer added successfully ...")
+        println("Peer added successfully ...")
       }
 
       override fun onError(error: Throwable) {
@@ -156,7 +155,7 @@ class BeacondartPlugin: FlutterPlugin, MethodCallHandler, ActivityAware {
         val ps: List<Peer> = peers.filter { it.publicKey == peerPublicKey }
         beaconWallet.removePeers(ps, callback = object : SetCallback {
           override fun onSuccess() {
-            println("peer removed successfully ...")
+            println("Peer removed successfully ...")
           }
 
           override fun onError(error: Throwable) {
@@ -174,7 +173,7 @@ class BeacondartPlugin: FlutterPlugin, MethodCallHandler, ActivityAware {
   private fun removePeers() {
     beaconWallet.removeAllPeers(callback = object : SetCallback {
       override fun onSuccess() {
-        println("all peers removed successfully ...")
+        println("All peers removed successfully ...")
       }
 
       override fun onError(error: Throwable) {
@@ -183,11 +182,12 @@ class BeacondartPlugin: FlutterPlugin, MethodCallHandler, ActivityAware {
     })
   }
 
-  private fun getPeers(callBackId: Int, result: Result) {
+  private fun getPeers(callBackId: Int) {
     beaconWallet.getPeers(callback = object : GetCallback<List<Peer>> {
       override fun onSuccess(peers: List<Peer>) {
-        val resp: Map<String, Any> = mapOf("id" to callBackId, "args" to listOf<String>())
-        result.success(resp)
+        val jsonPeers: List<String> = peers.map { it.toJson().toString() }
+        val resp: Map<String, Any> = mapOf("id" to callBackId, "args" to jsonPeers)
+        sendRequest(resp, callBackId)
       }
 
       override fun onError(error: Throwable) {
@@ -196,7 +196,7 @@ class BeacondartPlugin: FlutterPlugin, MethodCallHandler, ActivityAware {
     })
   }
 
-  private fun startBeacon(appName: String, publicKey: String, address: String, callBackId: Int, result: Result) {
+  private fun startBeacon(appName: String, publicKey: String, address: String, callBackId: Int) {
     BeaconWalletClient.Builder(appName).apply {
       support(tezos())
       use(p2pMatrix())
@@ -204,12 +204,12 @@ class BeacondartPlugin: FlutterPlugin, MethodCallHandler, ActivityAware {
       override fun onSuccess(beaconClient: BeaconWalletClient) {
         beaconWallet = beaconClient
         subscribeToRequests(publicKey, address)
-        result.success(mapOf("id" to callBackId, "args" to true))
+        sendRequest(true, callBackId)
       }
 
       override fun onError(error: Throwable) {
         error.printStackTrace()
-        result.success(mapOf("id" to callBackId, "args" to false))
+        sendRequest(false, callBackId)
       }
     })
   }
@@ -250,11 +250,10 @@ class BeacondartPlugin: FlutterPlugin, MethodCallHandler, ActivityAware {
       sendTezosResponse(response)
     }
 
-    println(message.toJson())
     sendRequest(mapOf(
       "id" to id,
       "type" to "TezosPermission",
-      "data" to message.toJson()
+      "data" to message.toJson().toString()
     ))
   }
 
@@ -269,11 +268,10 @@ class BeacondartPlugin: FlutterPlugin, MethodCallHandler, ActivityAware {
       sendTezosResponse(response)
     }
 
-    println(message)
     sendRequest(mapOf(
       "id" to id,
       "type" to "TezosOperation",
-      "data" to ""
+      "data" to message.toJson().toString()
     ))
   }
 
@@ -288,11 +286,10 @@ class BeacondartPlugin: FlutterPlugin, MethodCallHandler, ActivityAware {
       sendTezosResponse(response)
     }
 
-    println(message)
     sendRequest(mapOf(
       "id" to id,
       "type" to "TezosSignPayload",
-      "data" to ""
+      "data" to message.toJson().toString()
     ))
   }
 
@@ -307,18 +304,17 @@ class BeacondartPlugin: FlutterPlugin, MethodCallHandler, ActivityAware {
       sendTezosResponse(response)
     }
 
-    println(message)
     sendRequest(mapOf(
       "id" to id,
       "type" to "TezosBroadcast",
-      "data" to ""
+      "data" to message.toJson().toString()
     ))
   }
 
   private fun sendTezosResponse(response: BeaconResponse) {
     beaconWallet.respond(response, callback = object: ResponseCallback {
       override fun onSuccess() {
-        println("Response sent")
+        println("Response sent ...")
       }
 
       override fun onError(error: Throwable) {
