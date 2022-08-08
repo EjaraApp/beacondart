@@ -344,8 +344,7 @@ public class SwiftBeacondartPlugin: NSObject, FlutterPlugin {
         do {
             let encoder = JSONEncoder()
             let encoded = try encoder.encode(content)
-            print("encoded = ", encoded.base64EncodedString())
-            return encoded.base64EncodedString()
+            return String(data: encoded, encoding: .utf8) ?? ""
         } catch {
             print("encode error = ", error)
             return ""
