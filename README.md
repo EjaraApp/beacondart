@@ -31,47 +31,28 @@ Note that the library communicates with dart using purely json.
 
 ### Implementation
 
-Ultimately one dart singleton class `BeaconWalletClient` is exposed with the following interface;
+Ultimately one dart singleton class `BeaconWalletClient` which handles communication with the beacon android and ios sdk using flutter method channels.
 
-```dart
-class BeaconWalletClient {
-  static const MethodChannel _channel = MethodChannel('beacondart');
+#### Resources
 
-  static final BeaconWalletClient _singleton = BeaconWalletClient._internal();
+https://github.com/airgap-it/beacon-ios-sdk
 
-  static final Map<int, void Function(MethodCall call)> callbacksById = {};
+https://github.com/airgap-it/beacon-android-sdk
 
-  static int nextCallbackId = 0;
+https://docs.walletbeacon.io/wallet/getting-started/web/getting-started
 
-  factory BeaconWalletClient() {
-    return _singleton;
-  }
+https://typedocs.walletbeacon.io/
 
-  BeaconWalletClient._internal();
+https://gitlab.com/tezos/tzip/-/tree/master/proposals/tzip-10
 
-  Future<bool> init() async {
-    final bool beaconStarted = await _channel.invokeMethod("startBeacon");
-    return beaconStarted;
-  }
 
-  static Future<void> methodCallHandler(MethodCall call) async {
-    switch (call.method) {
-      case 'callListener':
-        callbacksById[call.arguments["id"]]!(call.arguments["args"]);
-        break;
-      default:
 
-    }
-  }
+The beacon library on the native side needs to communicate requests from the wallets as and when it receives them. This means that the native code needs to communicate also to the dart code.
 
-  addPeer(Map<String, dynamic> dApp) async {}
-  removePeer(Map<String, dynamic> dApp) async {}
-  getPeers() async {}
-  onBeaconRequest(void Function(dynamic response) responder) async {
-    _channel.setMethodCallHandler(methodCallHandler);
-    int currentListenerId = nextCallbackId++;
-    callbacksById[currentListenerId] = responder;
-    await _channel.invokeMethod("onBeaconRequest", currentListenerId);
-  }
-}
-```
+Here is a good working example of this https://github.com/flutter/plugins/tree/main/packages/quick_actions 
+ 
+And some enlightening article
+
+https://testfairy.com/blog/native-communication-with-a-callback-in-flutter/
+
+
