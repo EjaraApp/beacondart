@@ -28,11 +28,12 @@ class _MyAppState extends State<MyApp> {
 
   // Platform messages are asynchronous, so we initialize in an async method.
   Future<void> initPlatformState() async {
-    await bmw.init(
+    bool inited = await bmw.init(
       'Ejara',
       '9ae0875d510904b0b15d251d8def1f5f3353e9799841c0ed6d7ac718f04459a0',
       'tz1SkbBZg15BXPRkYCrSzhY6rq4tKGtpUSWv',
     );
+    print("======================== Inited ===================================== $inited");
   }
 
   String b58ToString(String b58String) {

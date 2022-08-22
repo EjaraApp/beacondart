@@ -42,6 +42,7 @@ class BeaconWalletClient {
       'publicKey': publicKey,
       'address': address,
     });
+
     // user completer to check beaconIsInit
     Completer<bool> completer = Completer();
 

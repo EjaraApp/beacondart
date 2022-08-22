@@ -24,6 +24,7 @@ import it.airgap.beaconsdk.client.wallet.BeaconWalletClient
 import it.airgap.beaconsdk.client.wallet.compat.*
 import it.airgap.beaconsdk.core.data.P2pPeer
 import it.airgap.beaconsdk.core.data.Peer
+import it.airgap.beaconsdk.core.data.BeaconError
 import it.airgap.beaconsdk.core.message.*
 import it.airgap.beaconsdk.transport.p2p.matrix.p2pMatrix
 import africa.ejara.beacondart.utils.toJson
@@ -74,6 +75,7 @@ class BeacondartPlugin: FlutterPlugin, MethodCallHandler, ActivityAware {
       "getPeers" -> {
         val callBackId: Int =  call.arguments()!!
         getPeers(callBackId)
+        result.success(true)
       }
       "onBeaconRequest" -> {
         beaconListenerReady = true
@@ -87,6 +89,7 @@ class BeacondartPlugin: FlutterPlugin, MethodCallHandler, ActivityAware {
       "startBeacon" -> {
         val args: Map<String, Any> = call.arguments()!!
         startBeacon(args["appName"] as String, args["publicKey"] as String, args["address"] as String, args["callBackId"] as Int)
+        result.success(true)
       }
       else -> result.notImplemented()
     }
@@ -113,7 +116,6 @@ class BeacondartPlugin: FlutterPlugin, MethodCallHandler, ActivityAware {
 
   private fun sendRequest(params: Any, callId: Int = beaconCallBackId) {
     val resp: Map<String, Any> = mapOf("id" to callId, "args" to params)
-
     activity.runOnUiThread(Runnable { channel.invokeMethod("callListener", resp) })
   }
 
@@ -236,17 +238,19 @@ class BeacondartPlugin: FlutterPlugin, MethodCallHandler, ActivityAware {
       is OperationTezosRequest -> handleTezosOperation(message)
       is SignPayloadTezosRequest -> handleTezosSignPayload(message)
       is BroadcastTezosRequest -> handleTezosBroadcast(message)
+      is BeaconRequest -> ErrorBeaconResponse.from(message, BeaconError.Aborted)
     }
   }
 
   private fun handleTezosPermission(message: PermissionTezosRequest, publicKey: String, address: String) {
     val id = registerCallBack {
       val status = it["status"] as Boolean
-      if (!status) {
-        return@registerCallBack
+      val response = if (!status) {
+        ErrorBeaconResponse.from(message, BeaconError.Aborted)
+      } else {
+          val account = tezosAccount(message.network, publicKey, address)
+        PermissionTezosResponse.from(message, account)
       }
-      val account = tezosAccount(message.network, publicKey, address)
-      val response = PermissionTezosResponse.from(message, account)
       sendTezosResponse(response)
     }
 
@@ -260,11 +264,12 @@ class BeacondartPlugin: FlutterPlugin, MethodCallHandler, ActivityAware {
   private fun handleTezosOperation(message: OperationTezosRequest) {
     val id = registerCallBack {
       val status = it["status"] as Boolean
-      if (!status) {
-        return@registerCallBack
+      val response = if (!status) {
+        ErrorBeaconResponse.from(message, BeaconError.Aborted)
+      } else {
+        val transactionHash = it["transactionHash"] as String
+        OperationTezosResponse.from(message, transactionHash)
       }
-      val transactionHash = it["transactionHash"] as String
-      val response = OperationTezosResponse.from(message, transactionHash)
       sendTezosResponse(response)
     }
 
@@ -278,11 +283,12 @@ class BeacondartPlugin: FlutterPlugin, MethodCallHandler, ActivityAware {
   private fun handleTezosSignPayload(message: SignPayloadTezosRequest) {
     val id = registerCallBack {
       val status = it["status"] as Boolean
-      if (!status) {
-        return@registerCallBack
+      val response = if (!status) {
+        ErrorBeaconResponse.from(message, BeaconError.Aborted)
+      } else {
+        val signature = it["signature"] as String
+        SignPayloadTezosResponse.from(message, message.signingType, signature)
       }
-      val signature = it["signature"] as String
-      val response = SignPayloadTezosResponse.from(message, message.signingType, signature)
       sendTezosResponse(response)
     }
 
@@ -296,11 +302,12 @@ class BeacondartPlugin: FlutterPlugin, MethodCallHandler, ActivityAware {
   private fun handleTezosBroadcast(message: BroadcastTezosRequest) {
     val id = registerCallBack {
       val status = it["status"] as Boolean
-      if (!status) {
-        return@registerCallBack
+      val response = if (!status) {
+        ErrorBeaconResponse.from(message, BeaconError.Aborted)
+      } else {
+        val transactionHash = it["transactionHash"] as String
+        BroadcastTezosResponse.from(message, transactionHash)
       }
-      val transactionHash = it["transactionHash"] as String
-      val response = BroadcastTezosResponse.from(message, transactionHash)
       sendTezosResponse(response)
     }
 
