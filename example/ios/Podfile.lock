@@ -1,13 +1,13 @@
 PODS:
   - Base58Swift (2.1.10):
     - BigInt (~> 5.0.0)
-  - BeaconBlockchainSubstrate (3.1.0):
-    - BeaconCore (~> 3.1.0)
-  - BeaconBlockchainTezos (3.1.0):
-    - BeaconCore (~> 3.1.0)
-  - BeaconClientWallet (3.1.0):
-    - BeaconCore (~> 3.1.0)
-  - BeaconCore (3.1.0):
+  - BeaconBlockchainSubstrate (3.2.1):
+    - BeaconCore (~> 3.2.1)
+  - BeaconBlockchainTezos (3.2.1):
+    - BeaconCore (~> 3.2.1)
+  - BeaconClientWallet (3.2.1):
+    - BeaconCore (~> 3.2.1)
+  - BeaconCore (3.2.1):
     - Base58Swift (~> 2.1.0)
     - Sodium (~> 0.9.1)
   - beacondart (0.0.1):
@@ -17,8 +17,8 @@ PODS:
     - BeaconCore
     - BeaconTransportP2PMatrix
     - Flutter
-  - BeaconTransportP2PMatrix (3.1.0):
-    - BeaconCore (~> 3.1.0)
+  - BeaconTransportP2PMatrix (3.2.1):
+    - BeaconCore (~> 3.2.1)
   - BigInt (5.0.0)
   - Flutter (1.0.0)
   - Sodium (0.9.1)
@@ -46,12 +46,12 @@ EXTERNAL SOURCES:
 
 SPEC CHECKSUMS:
   Base58Swift: 53d551f0b33d9478fa63b3445e453a772d6b31a7
-  BeaconBlockchainSubstrate: 756559d26194cec7a0fa3a5c154b144481346da6
-  BeaconBlockchainTezos: cec3acbffee93de39cf65a48a71a80107b5f54c2
-  BeaconClientWallet: 1ace31cc9b248ac97a3b6016675f93059a8d8bd3
-  BeaconCore: 16619de3b08d533406c13ed6d5339ed9b68b4498
+  BeaconBlockchainSubstrate: 00e0042e60f4ae5f338e4d191ff350b71e39db07
+  BeaconBlockchainTezos: 4037f45cfe4091562a0b597582f279f2cb60ece6
+  BeaconClientWallet: b4c2717fbe23a78f92e4db8bb15313344d02f009
+  BeaconCore: 55c7f92e0ce0d3cd1ee20290cf8127956a5df55c
   beacondart: 06b6a99d11ddf12096fbbed6fec09a4a807b987f
-  BeaconTransportP2PMatrix: 78b3e0b490c5bd9584c7e0ae9e925b1bba8b1720
+  BeaconTransportP2PMatrix: 12cc3ba9ce519026e28cb9a486312caf5e26e62f
   BigInt: 74b4d88367b0e819d9f77393549226d36faeb0d8
   Flutter: 50d75fe2f02b26cc09d224853bb45737f8b3214a
   Sodium: 23d11554ecd556196d313cf6130d406dfe7ac6da

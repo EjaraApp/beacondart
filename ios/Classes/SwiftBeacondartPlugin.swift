@@ -35,13 +35,12 @@ public class SwiftBeacondartPlugin: NSObject, FlutterPlugin {
                 
                 switch result {
                     case let .success(peers):
-                    let resp: [String: Any] = ["id": callBackId, "args": peers]
-                        self.channel!.invokeMethod("callListener", arguments: resp);
+                    self.sendRequest(["args": peers], callBackId)
                     case  .failure(_):
                         return
                 }
             }
-            result(nil)
+            result(true)
         case "onBeaconRequest":
             beaconListenerReady = true
             result(true)
@@ -54,11 +53,9 @@ public class SwiftBeacondartPlugin: NSObject, FlutterPlugin {
             startBeacon(appName: args["appName"] as! String, publicKey: args["publicKey"] as! String, address: args["address"] as! String, completion: {res in
                 switch res {
                 case  .success(_):
-                    let resp: [String: Any] = ["id": args["callBackId"] as! Int, "args": true]
-                    self.channel!.invokeMethod("callListener", arguments: resp)
+                    self.sendRequest(["args": true], args["callBackId"] as? Int)
                 case  .failure(_):
-                    let resp: [String: Any] = ["id": args["callBackId"] as! Int, "args": false]
-                    self.channel!.invokeMethod("callListener", arguments: resp)
+                    self.sendRequest(["args": false], args["callBackId"] as? Int)
                 }
             })
             result(true)
@@ -84,9 +81,11 @@ public class SwiftBeacondartPlugin: NSObject, FlutterPlugin {
         return callBackId
     }
     
-    func sendRequest(params: [String: Any]) {
-        let resp: [String: Any] = ["id": beaconCallBackId, "args": params]
-        self.channel!.invokeMethod("callListener", arguments: resp)
+    func sendRequest(_ params: [String: Any], _ callId: Int? = nil) {
+        let resp: [String: Any] = ["id": callId ?? beaconCallBackId, "args": params]
+        DispatchQueue.main.async {
+            self.channel!.invokeMethod("callListener", arguments: resp)
+        }
     }
     
     func registerCallBack(callBack: @escaping ([String:Any]) -> Void) -> Int {
@@ -97,7 +96,7 @@ public class SwiftBeacondartPlugin: NSObject, FlutterPlugin {
     
     func execCallBack(params: [String:Any]) {
         let id: Int = params["id"] as! Int
-        callbacksById[id]!(params)
+        callbacksById[id]?(params)
         callbacksById.removeValue(forKey: id)
     }
         
@@ -140,7 +139,6 @@ public class SwiftBeacondartPlugin: NSObject, FlutterPlugin {
     }
 
     func startBeacon(appName: String, publicKey: String, address: String, completion: @escaping (Result<(), Error>) -> ()) {
-        print("startBeacon")
         createBeaconWallet(appName: appName, completion: { result in
                 guard case .success(_) = result else {
                     return
@@ -234,14 +232,21 @@ public class SwiftBeacondartPlugin: NSObject, FlutterPlugin {
         let content = request as! BroadcastTezosRequest
         let id: Int = self.registerCallBack(callBack: { (params: [String:Any]) -> Void in
             let status = params["status"] as! Bool
-            if status == false {
-                return
-            }
-            let transactionHash = params["transactionHash"] as! String
-            let response = BeaconResponse<Tezos>.blockchain(.broadcast(BroadcastTezosResponse(from: content, transactionHash: transactionHash)))
+            let response: BeaconResponse<Tezos> = {
+                if status == false {
+                    return BeaconResponse<Tezos>.error(ErrorBeaconResponse(id: content.id,
+                                                                           version: content.version,
+                                                                           destination: content.origin,
+                                                                           errorType: .aborted))
+                } else {
+                    let transactionHash = params["transactionHash"] as! String
+                    return BeaconResponse<Tezos>.blockchain(.broadcast(BroadcastTezosResponse(from: content, transactionHash: transactionHash)))
+                }
+            }()
             self.sendTezosResponse(from: response)
         })
-        self.sendRequest(params: [
+        
+        self.sendRequest([
             "id": id,
             "type": "TezosBroadcast",
             "data": self.toJsonB64(from: content)
@@ -252,14 +257,21 @@ public class SwiftBeacondartPlugin: NSObject, FlutterPlugin {
         let content = request as! SignPayloadTezosRequest
         let id: Int = self.registerCallBack(callBack: { (params: [String:Any]) -> Void in
             let status = params["status"] as! Bool
-            if status == false {
-                return
-            }
-            let signature = params["signature"] as! String
-            let response = BeaconResponse<Tezos>.blockchain(.signPayload(SignPayloadTezosResponse(from: content, signature: signature)))
+            let response: BeaconResponse<Tezos> = {
+                if status == false {
+                    return BeaconResponse<Tezos>.error(ErrorBeaconResponse(id: content.id,
+                                                                           version: content.version,
+                                                                           destination: content.origin,
+                                                                           errorType: .aborted))
+                } else {
+                    let signature = params["signature"] as! String
+                    return BeaconResponse<Tezos>.blockchain(.signPayload(SignPayloadTezosResponse(from: content, signature: signature)))
+                }
+            }()
             self.sendTezosResponse(from: response)
         })
-        self.sendRequest(params: [
+        
+        self.sendRequest([
             "id": id,
             "type": "TezosSignPayload",
             "data": self.toJsonB64(from: content)
@@ -270,15 +282,20 @@ public class SwiftBeacondartPlugin: NSObject, FlutterPlugin {
         let content = request as! OperationTezosRequest
         let id: Int = self.registerCallBack(callBack: { (params: [String:Any]) -> Void in
             let status = params["status"] as! Bool
-            if status == false {
-                return
-            }
-            let transactionHash = params["transactionHash"] as! String
-            let response = BeaconResponse<Tezos>.blockchain(.operation(OperationTezosResponse(from: content, transactionHash: transactionHash)))
+            let response: BeaconResponse<Tezos> = {
+                if status == false {
+                    return BeaconResponse<Tezos>.error(ErrorBeaconResponse(id: content.id,
+                                                                           version: content.version,
+                                                                           destination: content.origin,
+                                                                           errorType: .aborted))
+                } else {
+                    let transactionHash = params["transactionHash"] as! String
+                    return BeaconResponse<Tezos>.blockchain(.operation(OperationTezosResponse(from: content, transactionHash: transactionHash)))
+                }
+            }()
             self.sendTezosResponse(from: response)
         })
-        
-        self.sendRequest(params: [
+        self.sendRequest([
             "id": id,
             "type": "TezosOperation",
             "data": self.toJsonB64(from: content)
@@ -288,20 +305,30 @@ public class SwiftBeacondartPlugin: NSObject, FlutterPlugin {
     func handleTezosPermission(from request: BeaconRequestProtocol, publicKey: String, address: String) -> Void {
         let content = request as! PermissionTezosRequest
         let id: Int = self.registerCallBack(callBack: { (params: [String:Any]) -> Void in
-            do {
-                let status = params["status"] as! Bool
+            let status = params["status"] as! Bool
+            let response: BeaconResponse<Tezos> = {
                 if status == false {
-                    return
+                    return BeaconResponse<Tezos>.error(ErrorBeaconResponse(id: content.id,
+                                                                           version: content.version,
+                                                                           destination: content.origin,
+                                                                           errorType: .aborted))
+                } else {
+                    do {
+                        let account = try self.tezosAccount(network: content.network, publicKey: publicKey, address: address)
+                        return BeaconResponse<Tezos>.permission(PermissionTezosResponse(from: content, account: account))
+                    } catch {
+                        print(error)
+                        return BeaconResponse<Tezos>.error(ErrorBeaconResponse(id: content.id,
+                                                                               version: content.version,
+                                                                               destination: content.origin,
+                                                                               errorType: .aborted))
+                    }
                 }
-                let account = try self.tezosAccount(network: content.network, publicKey: publicKey, address: address)
-                let response = BeaconResponse<Tezos>.permission(PermissionTezosResponse(from: content, account: account))
-                self.sendTezosResponse(from: response)
-            } catch {
-                print(error)
-            }
-            
+            }()
+            self.sendTezosResponse(from: response)
+
         })
-        self.sendRequest(params: [
+        self.sendRequest([
             "id": id,
             "type": "TezosPermission",
             "data": self.toJsonB64(from: content)
