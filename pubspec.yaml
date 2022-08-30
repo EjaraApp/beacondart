@@ -1,6 +1,6 @@
 name: beacondart
 description: This project implements tezos beacon (tzip-10) in dart.
-version: 0.0.2
+version: 0.0.3
 homepage: https://github.com/EjaraApp/beacondart
 
 environment:
