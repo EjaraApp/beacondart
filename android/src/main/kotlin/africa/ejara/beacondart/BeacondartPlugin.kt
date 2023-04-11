@@ -153,8 +153,8 @@ class BeacondartPlugin: FlutterPlugin, MethodCallHandler, ActivityAware {
   private fun removePeer(peerPublicKey: String) {
 
     beaconWallet.getPeers(callback = object : GetCallback<List<Peer>> {
-      override fun onSuccess(peers: List<Peer>) {
-        val ps: List<Peer> = peers.filter { it.publicKey == peerPublicKey }
+      override fun onSuccess(value: List<Peer>) {
+        val ps: List<Peer> = value.filter { it.publicKey == peerPublicKey }
         beaconWallet.removePeers(ps, callback = object : SetCallback {
           override fun onSuccess() {
             println("Peer removed successfully ...")
@@ -186,8 +186,8 @@ class BeacondartPlugin: FlutterPlugin, MethodCallHandler, ActivityAware {
 
   private fun getPeers(callBackId: Int) {
     beaconWallet.getPeers(callback = object : GetCallback<List<Peer>> {
-      override fun onSuccess(peers: List<Peer>) {
-        val jsonPeers: List<String> = peers.map { it.toJson().toString() }
+      override fun onSuccess(value: List<Peer>) {
+        val jsonPeers: List<String> = value.map { it.toJson().toString() }
         val resp: Map<String, Any> = mapOf("id" to callBackId, "args" to jsonPeers)
         sendRequest(resp, callBackId)
       }
@@ -239,7 +239,28 @@ class BeacondartPlugin: FlutterPlugin, MethodCallHandler, ActivityAware {
       is SignPayloadTezosRequest -> handleTezosSignPayload(message)
       is BroadcastTezosRequest -> handleTezosBroadcast(message)
       is BeaconRequest -> ErrorBeaconResponse.from(message, BeaconError.Aborted)
+      is PermissionBeaconResponse -> handleBeaconPermission(message)
+      is BlockchainBeaconResponse -> handleBlockchainBeaconResponse(message)
+      is AcknowledgeBeaconResponse -> handleAcknowledgeBeaconResponse(message)
+      is ErrorBeaconResponse -> handleErrorBeaconResponse(message)
+      is DisconnectBeaconMessage -> handleDisconnectBeaconMessage(message)
     }
+  }
+
+  private fun handleBeaconPermission(message: PermissionBeaconResponse) {
+    println(message)
+  }
+  private fun handleAcknowledgeBeaconResponse(message: AcknowledgeBeaconResponse) {
+    println(message)
+  }
+  private fun handleBlockchainBeaconResponse(message: BlockchainBeaconResponse) {
+    println(message)
+  }
+  private fun handleErrorBeaconResponse(message: ErrorBeaconResponse) {
+    println(message)
+  }
+  private fun handleDisconnectBeaconMessage(message: DisconnectBeaconMessage) {
+    println(message)
   }
 
   private fun handleTezosPermission(message: PermissionTezosRequest, publicKey: String, address: String) {
