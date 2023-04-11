@@ -12,3 +12,7 @@ Fix android hangup issues.
 
 Fix kotlin build issues
 - Modify swift file to update Beacon dependencies on ios
+
+## 0.0.4
+
+Set lower bound for flutter package
